@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?><sqlb_project><db path="C:/Users/Duong/Downloads/Indian's retail industry.db" readonly="0" foreign_keys="1" case_sensitive_like="0" temp_store="0" wal_autocheckpoint="1000" synchronous="2"/><attached/><window><main_tabs open="structure browser pragmas query" current="3"/></window><tab_structure><column_width id="0" width="300"/><column_width id="1" width="0"/><column_width id="2" width="100"/><column_width id="3" width="1170"/><column_width id="4" width="0"/><expanded_item id="0" parent="1"/><expanded_item id="1" parent="1"/><expanded_item id="2" parent="1"/><expanded_item id="3" parent="1"/></tab_structure><tab_browse><current_table name="4,18:mainsales_transactions"/><default_encoding codec=""/><browse_table_settings><table schema="main" name="sales_customer" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_"><sort/><column_widths><column index="1" value="108"/><column index="2" value="143"/><column index="3" value="107"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table><table schema="main" name="sales_date" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_"><sort><column index="6" mode="0"/></sort><column_widths><column index="1" value="73"/><column index="2" value="73"/><column index="3" value="40"/><column index="4" value="92"/><column index="5" value="103"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table><table schema="main" name="sales_market" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_"><sort/><column_widths><column index="2" value="104"/><column index="3" value="48"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table><table schema="main" name="sales_products" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_"><sort/><column_widths><column index="1" value="98"/><column index="2" value="97"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table><table schema="main" name="sales_transactions" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_"><sort><column index="4" mode="0"/></sort><column_widths><column index="1" value="98"/><column index="2" value="108"/><column index="3" value="93"/><column index="4" value="82"/><column index="5" value="71"/><column index="6" value="98"/><column index="7" value="66"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table><table schema="main" name="sales_transactions1" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_"><sort/><column_widths><column index="1" value="98"/><column index="2" value="108"/><column index="3" value="93"/><column index="4" value="82"/><column index="5" value="71"/><column index="6" value="98"/><column index="7" value="66"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table></browse_table_settings></tab_browse><tab_sql><sql name="SQL 1">--Filtering out missing value and illogical value in the sales_transactions1
+-- Creating a new table only if it doesn't exist
+CREATE TABLE IF NOT EXISTS sales_transactions AS
+SELECT *
+FROM sales_transactions1
+WHERE sales_amount &gt; 0;
+
+--Normalize USD currency to INR currency
+ALTER TABLE sales_transactions
+ADD COLUMN Norm_currency INT;
+-- Update the new column based on the conversion
+UPDATE sales_transactions
+SET Norm_currency = 
+  CASE
+    WHEN currency = 'USD' THEN ROUND(sales_amount * 75)
+    ELSE sales_amount
+  END;
+  
+--Group by market code, finding the retail industry with largest revenue
+SELECT market_code, markets_name, round(SUM(Norm_currency) * 1.0 / 1000000,2) as 'Total Revenue in million'
+FROM sales_transactions JOIN sales_market ON sales_transactions.market_code = sales_market.markets_code
+GROUP BY(market_code)
+ORDER BY 3 DESC
+
+--Group by market code, finding the retail industry with biggest sale quantity
+SELECT market_code, markets_name, SUM(sales_qty) as 'Total quantity'
+FROM sales_transactions JOIN sales_market ON sales_transactions.market_code = sales_market.markets_code
+GROUP BY(market_code)
+ORDER BY 3 DESC
+
+--Group by customer_code code, finding the retail industry with largest revenue
+SELECT sales_transactions.customer_code, custmer_name, round(SUM(Norm_currency) * 1.0 / 1000000,2) as 'Total Revenue in million'
+FROM sales_transactions JOIN sales_customer ON sales_transactions.customer_code = sales_customer.customer_code
+GROUP BY(sales_transactions.customer_code)
+ORDER BY 3 DESC
+
+--Group by customer_code code, finding the retail industry with sale quantity
+SELECT sales_transactions.customer_code, custmer_name, round(SUM(Norm_currency) * 1.0 / 1000000,2) as 'Total Revenue in million'
+FROM sales_transactions JOIN sales_customer ON sales_transactions.customer_code = sales_customer.customer_code
+GROUP BY(sales_transactions.customer_code)
+ORDER BY 3 DESC
+
+--finding the total revenue of Chennai in 2017
+-- Update the new column based on the conversion
+
+ALTER TABLE sales_date
+ADD COLUMN d_m_y INT;
+UPDATE sales_date
+SET d_m_y = strftime('%d/%m/%Y', date);
+
+SELECT sales_transactions.market_code, sales_market.markets_name, ROUND(SUM(sales_amount) * 1.0 / 1000000, 2) AS 'Total revenue in 2017'
+FROM sales_transactions 
+JOIN sales_date ON sales_transactions.order_date = sales_date.d_m_y
+JOIN sales_market ON sales_market.markets_code = sales_transactions.market_code
+WHERE sales_transactions.market_code LIKE '%001'
+GROUP BY sales_transactions.market_code, sales_market.markets_name;
+
+--Finding top selling product_code
+SELECT sales_transactions.product_code, SUM(sales_qty) as 'Total number of selling for each product'
+FROM sales_transactions
+JOIN sales_products ON sales_transactions.product_code = sales_products.product_code
+Where sales_transactions.sales_qty &gt; 0
+GROUP BY sales_transactions.product_code
+ORDER BY 2 DESC
+
+--Finding highest revenue product_code
+SELECT sales_transactions.product_code, round(SUM(sales_amount) *1.0/ 1000000,3) as 'Highest revenue in million'
+FROM sales_transactions
+JOIN sales_products ON sales_transactions.product_code = sales_products.product_code
+Where sales_transactions.sales_amount &gt; 0
+GROUP BY sales_transactions.product_code
+ORDER BY 2 DESC
+
+--Compare sales performance across different markets or regions.
+SELECT zone, 
+	round(SUM(Norm_currency) *1.0/ 1000000,3) as 'Revenue for each region',
+	SUM(sales_qty) as 'Total number of selling for each region'
+FROM sales_transactions 
+JOIN sales_market ON sales_transactions.market_code = sales_market.markets_code
+GROUP BY zone
+ORDER BY 2 DESC
+
+-- Identify peak sales periods on a monthly basis
+-- Add a new column to sales_transactions
+-- Add a new column to sales_transactions
+ALTER TABLE sales_transactions
+ADD COLUMN month INT;
+
+-- Update the new column with the month information
+UPDATE sales_transactions
+SET month = 
+    CASE 
+        WHEN CAST(SUBSTR(order_date, 1, INSTR(order_date, '/') - 1) AS INTEGER) = 1 THEN 'January'
+        WHEN CAST(SUBSTR(order_date, 1, INSTR(order_date, '/') - 1) AS INTEGER) = 2 THEN 'February'
+        WHEN CAST(SUBSTR(order_date, 1, INSTR(order_date, '/') - 1) AS INTEGER) = 3 THEN 'March'
+        WHEN CAST(SUBSTR(order_date, 1, INSTR(order_date, '/') - 1) AS INTEGER) = 4 THEN 'April'
+        WHEN CAST(SUBSTR(order_date, 1, INSTR(order_date, '/') - 1) AS INTEGER) = 5 THEN 'May'
+        WHEN CAST(SUBSTR(order_date, 1, INSTR(order_date, '/') - 1) AS INTEGER) = 6 THEN 'June'
+        WHEN CAST(SUBSTR(order_date, 1, INSTR(order_date, '/') - 1) AS INTEGER) = 7 THEN 'July'
+        WHEN CAST(SUBSTR(order_date, 1, INSTR(order_date, '/') - 1) AS INTEGER) = 8 THEN 'August'
+        WHEN CAST(SUBSTR(order_date, 1, INSTR(order_date, '/') - 1) AS INTEGER) = 9 THEN 'September'
+        WHEN CAST(SUBSTR(order_date, 1, INSTR(order_date, '/') - 1) AS INTEGER) = 10 THEN 'October'
+        WHEN CAST(SUBSTR(order_date, 1, INSTR(order_date, '/') - 1) AS INTEGER) = 11 THEN 'November'
+        WHEN CAST(SUBSTR(order_date, 1, INSTR(order_date, '/') - 1) AS INTEGER) = 12 THEN 'December'
+    END;
+
+SELECT month, ROUND(SUM(Norm_currency) * 1.0/ 1000000, 3) as 'Revenue'
+FROM sales_transactions
+GROUP BY month
+ORDER BY 2 DESC</sql><current_tab id="0"/></tab_sql></sqlb_project>
